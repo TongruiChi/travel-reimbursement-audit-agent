@@ -1,0 +1,98 @@
+{
+  "trip": {
+    "employee_name": "张三",
+    "department": "法务部",
+    "origin": "北京",
+    "destination": "上海",
+    "start_date": "2026-05-20",
+    "end_date": "2026-05-23",
+    "purpose": "客户现场法律服务支持"
+  },
+  "expenses": [
+    {
+      "expense_date": "2026-05-20",
+      "category": "交通",
+      "amount": 86.5,
+      "currency": "CNY",
+      "merchant": "滴滴出行",
+      "description": "从上海虹桥站前往客户公司",
+      "receipt": {
+        "receipt_type": "电子发票",
+        "receipt_number": "INV-TRAFFIC-20260520-0001",
+        "file_url": "mock://receipts/traffic_001.pdf",
+        "issued_date": "2026-05-20",
+        "seller_name": "滴滴出行科技有限公司",
+        "amount": 86.5,
+        "description": "出差期间市内交通费"
+      }
+    },
+    {
+      "expense_date": "2026-05-20",
+      "category": "住宿",
+      "amount": 920.0,
+      "currency": "CNY",
+      "merchant": "上海中心商务酒店",
+      "description": "上海出差住宿一晚",
+      "receipt": {
+        "receipt_type": "电子发票",
+        "receipt_number": "INV-HOTEL-20260520-0001",
+        "file_url": "mock://receipts/hotel_001.pdf",
+        "issued_date": "2026-05-20",
+        "seller_name": "上海中心商务酒店有限公司"
+      }
+    },
+    {
+      "expense_date": "2026-05-21",
+      "category": "餐饮",
+      "amount": 132.0,
+      "currency": "CNY",
+      "merchant": "客户园区简餐店",
+      "description": "出差期间工作午餐",
+      "receipt": {
+        "receipt_type": "支付凭证",
+        "receipt_number": "PAY-MEAL-20260521-0001",
+        "file_url": "mock://receipts/meal_001.png",
+        "issued_date": "2026-05-21",
+        "seller_name": "客户园区简餐店"
+      }
+    },
+    {
+      "expense_date": "2026-05-21",
+      "category": "餐饮",
+      "amount": 268.0,
+      "currency": "CNY",
+      "merchant": "上海某商务餐厅",
+      "description": "与客户项目负责人沟通案件材料",
+      "receipt": {
+        "receipt_type": "电子发票",
+        "receipt_number": "INV-MEAL-20260521-0002",
+        "file_url": "mock://receipts/meal_002.pdf",
+        "issued_date": "2026-05-21",
+        "seller_name": "上海某商务餐厅有限公司"
+      }
+    },
+    {
+      "expense_date": "2026-05-24",
+      "category": "交通",
+      "amount": 58.0,
+      "currency": "CNY",
+      "merchant": "滴滴出行",
+      "description": "出差结束后个人市内出行",
+      "receipt": {
+        "receipt_type": "电子发票",
+        "receipt_number": "INV-TRAFFIC-20260524-0001",
+        "file_url": "mock://receipts/traffic_002.pdf",
+        "issued_date": "2026-05-24",
+        "seller_name": "滴滴出行科技有限公司"
+      }
+    },
+    {
+      "expense_date": "2026-05-22",
+      "category": "其他",
+      "amount": 199.0,
+      "currency": "CNY",
+      "merchant": "办公用品便利店",
+      "description": "临时打印和装订客户材料"
+    }
+  ]
+}

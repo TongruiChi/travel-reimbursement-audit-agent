@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Compile check
+        run: python -m compileall app scripts tests
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Reset demo data
+        run: python scripts/seed_mock_data.py --reset
+
+      - name: Run demo walkthrough
+        run: python scripts/demo_walkthrough_check.py
