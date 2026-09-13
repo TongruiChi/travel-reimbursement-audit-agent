@@ -95,7 +95,7 @@ The MVP intentionally avoids real LLM calls because:
 - Rule management UI.
 - Human review workflow.
 - Audit trail and permissions.
-- Unit tests, integration tests, CI.
+- Broader integration coverage, deployment checks, and CI release gates.
 - Monitoring and structured logging.
 - Frontend dashboard.
 - Export to Excel or PDF.

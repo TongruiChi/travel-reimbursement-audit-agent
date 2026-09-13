@@ -2,11 +2,7 @@
 
 ## Before The Demo
 
-Open a terminal in:
-
-```powershell
-D:\Code\agent30\travel-reimbursement-agent
-```
+Open a terminal at the repository root. The commands below use Windows PowerShell.
 
 Use the project virtual environment:
 
@@ -115,4 +111,4 @@ RAG retrieves relevant policy rules from Markdown and gives the Agent explainabl
 
 ### What would be needed for production?
 
-Authentication, permissions, OCR, configurable rules, human review workflow, audit logs, tests, CI, monitoring, and frontend dashboard.
+Production-grade authentication, permissions, OCR, configurable rules, human review workflow, audit logs, broader integration coverage, CI release gates, monitoring, and a frontend dashboard.

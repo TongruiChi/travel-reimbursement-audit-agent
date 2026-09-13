@@ -30,6 +30,8 @@ The MVP keeps compliance decisions deterministic because reimbursement checks mu
 - Hand-written Agent orchestration layer.
 - JSON audit report persistence in `audit_reports`.
 - Report query endpoints for detail, history, and latest report.
+- Automated pytest coverage for the API, RAG, audit engine, Agent, and reporting.
+- GitHub Actions CI on Python 3.11 and 3.12.
 
 ## 4. Tech Stack
 
@@ -40,6 +42,8 @@ The MVP keeps compliance decisions deterministic because reimbursement checks mu
 - Pydantic
 - Pydantic Settings
 - Uvicorn
+- Pytest
+- GitHub Actions
 - Markdown policy files
 - Standard-library demo scripts
 
@@ -136,10 +140,13 @@ Current SQLite tables:
 
 ## 10. Quick Start
 
-Install dependencies:
+### Windows PowerShell
+
+Create a virtual environment and install development dependencies:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 ```
 
 Reset mock data:
@@ -160,13 +167,51 @@ Start the API server:
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8765
 ```
 
+### Linux
+
+Create a virtual environment and install development dependencies:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-dev.txt
+```
+
+Reset mock data and run the main-flow check:
+
+```bash
+.venv/bin/python scripts/seed_mock_data.py --reset
+.venv/bin/python scripts/demo_walkthrough_check.py
+```
+
+Start the API server:
+
+```bash
+.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8765
+```
+
 Open Swagger:
 
 ```text
 http://127.0.0.1:8765/docs
 ```
 
-## 11. Demo Walkthrough
+## 11. Automated Testing and CI
+
+Run the automated test suite locally:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+On Linux:
+
+```bash
+.venv/bin/python -m pytest -q
+```
+
+The validated v0.1.0 baseline is `14 passed`. GitHub Actions runs the project on Python 3.11 and 3.12 and performs the compile check, pytest suite, mock data reset, and demo walkthrough.
+
+## 12. Demo Walkthrough
 
 Recommended demo order:
 
@@ -182,7 +227,7 @@ Recommended demo order:
 10. Query report history with `GET /trips/1/audit-reports`.
 11. Query the latest report with `GET /trips/1/audit-reports/latest`.
 
-## 12. Core API Endpoints
+## 13. Core API Endpoints
 
 - `GET /health`
 - `POST /trips/`
@@ -197,7 +242,7 @@ Recommended demo order:
 - `GET /trips/{trip_id}/audit-reports`
 - `GET /trips/{trip_id}/audit-reports/latest`
 
-## 13. Example Audit Result
+## 14. Example Audit Result
 
 With the bundled mock data, trip `1` returns:
 
@@ -216,7 +261,7 @@ Expected flags include:
 - `RECEIPT_MISSING`
 - `OTHER_EXPENSE_NEED_REVIEW`
 
-## 14. Current MVP Scope
+## 15. Current MVP Scope
 
 Implemented:
 
@@ -227,6 +272,8 @@ Implemented:
 - Deterministic audit engine.
 - Hand-written Agent orchestration.
 - JSON report persistence and query APIs.
+- Automated pytest suite.
+- GitHub Actions CI on Python 3.11 and 3.12.
 
 Not implemented:
 
@@ -239,7 +286,7 @@ Not implemented:
 - Approval workflow.
 - Export to Excel/PDF.
 
-## 15. Future Improvements
+## 16. Future Improvements
 
 - Replace keyword retrieval with embeddings and a vector database.
 - Add an LLM planner while keeping deterministic audit checks as tools.
@@ -248,4 +295,3 @@ Not implemented:
 - Add approval workflow and manual review assignment.
 - Add role-based access control.
 - Add report export.
-- Add automated tests and CI.
