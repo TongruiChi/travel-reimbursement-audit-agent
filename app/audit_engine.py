@@ -1,9 +1,19 @@
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
+from app.policy import (
+    Enforcement,
+    EvaluationResult,
+    EvaluatorName,
+    PolicyDocument,
+    PolicyRegistry,
+    PolicyRule,
+    PolicyThreshold,
+    Severity,
+    ThresholdBasis,
+    ThresholdComparison,
+    policy_registry,
+)
 
-HIGH = "high"
-MEDIUM = "medium"
-LOW = "low"
 
 APPROVED = "APPROVED"
 NEEDS_REVIEW = "NEEDS_REVIEW"
@@ -19,26 +29,212 @@ def _has_receipt(expense: Any) -> bool:
     return True
 
 
-def _flag(
-    rule_id: str,
-    flag: str,
-    severity: str,
-    message: str,
-) -> Dict[str, str]:
+def _matches_threshold(value: float, threshold: PolicyThreshold) -> bool:
+    if threshold.comparison == ThresholdComparison.GT:
+        return value > threshold.amount
+    if threshold.comparison == ThresholdComparison.LTE:
+        return value <= threshold.amount
+    raise ValueError(f"Unsupported threshold comparison: {threshold.comparison}")
+
+
+def evaluate_expense_date_within_trip(
+    rule: PolicyRule,
+    policy: PolicyDocument,
+    trip: Any,
+    expense: Any,
+) -> EvaluationResult:
+    del rule, policy
+    if trip.start_date <= expense.expense_date <= trip.end_date:
+        return EvaluationResult.PASS
+    return EvaluationResult.VIOLATION
+
+
+def evaluate_positive_amount(
+    rule: PolicyRule,
+    policy: PolicyDocument,
+    trip: Any,
+    expense: Any,
+) -> EvaluationResult:
+    del policy, trip
+    if rule.threshold is None:
+        raise ValueError(f"Rule {rule.rule_id} requires a threshold")
+    if _matches_threshold(float(expense.amount), rule.threshold):
+        return EvaluationResult.PASS
+    return EvaluationResult.VIOLATION
+
+
+def evaluate_amount_threshold(
+    rule: PolicyRule,
+    policy: PolicyDocument,
+    trip: Any,
+    expense: Any,
+) -> EvaluationResult:
+    del trip
+    if rule.threshold is None:
+        raise ValueError(f"Rule {rule.rule_id} requires a threshold")
+
+    if getattr(expense, "currency", None) != policy.currency:
+        return EvaluationResult.INDETERMINATE
+
+    if rule.applicable_cities is not None:
+        expense_city = getattr(expense, "city", None)
+        if expense_city is None:
+            return EvaluationResult.INDETERMINATE
+        if expense_city not in rule.applicable_cities:
+            return EvaluationResult.NOT_APPLICABLE
+
+    amount = float(expense.amount)
+    if rule.threshold.basis == ThresholdBasis.PER_NIGHT:
+        night_count = getattr(expense, "night_count", None)
+        if night_count is None or night_count <= 0:
+            return EvaluationResult.INDETERMINATE
+        amount = amount / night_count
+
+    if _matches_threshold(amount, rule.threshold):
+        return EvaluationResult.PASS
+    return EvaluationResult.VIOLATION
+
+
+def evaluate_receipt_presence(
+    rule: PolicyRule,
+    policy: PolicyDocument,
+    trip: Any,
+    expense: Any,
+) -> EvaluationResult:
+    del policy, trip
+    if not _has_receipt(expense):
+        return EvaluationResult.VIOLATION
+
+    # Presence is only one part of the current receipt policies. A record does not
+    # prove authenticity, validity, or that the receipt has not been reimbursed.
+    if rule.enforcement == Enforcement.PARTIAL:
+        return EvaluationResult.INDETERMINATE
+    return EvaluationResult.PASS
+
+
+def evaluate_manual_review(
+    rule: PolicyRule,
+    policy: PolicyDocument,
+    trip: Any,
+    expense: Any,
+) -> EvaluationResult:
+    del rule, policy, trip, expense
+    return EvaluationResult.INDETERMINATE
+
+
+Evaluator = Callable[
+    [PolicyRule, PolicyDocument, Any, Any],
+    EvaluationResult,
+]
+
+EVALUATORS: Dict[EvaluatorName, Evaluator] = {
+    EvaluatorName.EXPENSE_DATE_WITHIN_TRIP: evaluate_expense_date_within_trip,
+    EvaluatorName.POSITIVE_AMOUNT: evaluate_positive_amount,
+    EvaluatorName.AMOUNT_THRESHOLD: evaluate_amount_threshold,
+    EvaluatorName.RECEIPT_PRESENCE: evaluate_receipt_presence,
+    EvaluatorName.MANUAL_REVIEW: evaluate_manual_review,
+}
+
+missing_evaluators = set(EvaluatorName) - set(EVALUATORS)
+if missing_evaluators:
+    missing_names = ", ".join(sorted(item.value for item in missing_evaluators))
+    raise RuntimeError(f"Evaluator registry is incomplete: {missing_names}")
+
+
+def _evaluate_rule(
+    rule: PolicyRule,
+    policy: PolicyDocument,
+    trip: Any,
+    expense: Any,
+) -> EvaluationResult:
+    category = getattr(expense, "category", "")
+    if "ALL" not in rule.category and category not in rule.category:
+        return EvaluationResult.NOT_APPLICABLE
+
+    if (
+        rule.evaluable_categories is not None
+        and category not in rule.evaluable_categories
+    ):
+        return EvaluationResult.INDETERMINATE
+
+    if rule.evaluator is None:
+        return EvaluationResult.INDETERMINATE
+
+    try:
+        evaluator = EVALUATORS[rule.evaluator]
+    except KeyError as exc:
+        raise ValueError(f"Unknown evaluator: {rule.evaluator}") from exc
+    return evaluator(rule, policy, trip, expense)
+
+
+def _build_rule_result(
+    rule: PolicyRule,
+    policy_version: str,
+    result: EvaluationResult,
+) -> Dict[str, Any]:
+    is_violation = result == EvaluationResult.VIOLATION
     return {
-        "rule_id": rule_id,
-        "flag": flag,
-        "severity": severity,
-        "message": message,
+        "rule_id": rule.rule_id,
+        "policy_version": policy_version,
+        "result": result.value,
+        "severity": rule.severity.value if rule.severity is not None else None,
+        "flag": rule.flag if is_violation else None,
+        "message": rule.violation_message if is_violation else None,
     }
 
 
-def _determine_item_status(flags: List[Dict[str, str]]) -> str:
-    if any(flag["severity"] == HIGH for flag in flags):
+def _determine_item_status(rule_results: List[Dict[str, Any]]) -> str:
+    violations = [
+        result
+        for result in rule_results
+        if result["result"] == EvaluationResult.VIOLATION.value
+    ]
+    if any(result["severity"] == Severity.HIGH.value for result in violations):
         return REJECTED
-    if flags:
+    if violations:
+        return NEEDS_REVIEW
+    if any(
+        result["result"] == EvaluationResult.INDETERMINATE.value
+        for result in rule_results
+    ):
         return NEEDS_REVIEW
     return APPROVED
+
+
+def _build_legacy_flags(
+    rules: List[PolicyRule],
+    rule_results: List[Dict[str, Any]],
+) -> List[Dict[str, str]]:
+    flags: List[Dict[str, str]] = []
+
+    for rule, result in zip(rules, rule_results):
+        is_violation = result["result"] == EvaluationResult.VIOLATION.value
+        is_manual_review_marker = (
+            rule.evaluator == EvaluatorName.MANUAL_REVIEW
+            and result["result"] == EvaluationResult.INDETERMINATE.value
+        )
+        if not (is_violation or is_manual_review_marker):
+            continue
+
+        # The legacy API contract requires four string fields. Rules without a
+        # legacy severity or message remain available through rule_results only.
+        if (
+            rule.flag is None
+            or rule.severity is None
+            or rule.violation_message is None
+        ):
+            continue
+
+        flags.append(
+            {
+                "rule_id": rule.rule_id,
+                "flag": rule.flag,
+                "severity": rule.severity.value,
+                "message": rule.violation_message,
+            }
+        )
+
+    return flags
 
 
 def determine_report_status(items: List[Dict[str, Any]]) -> str:
@@ -49,78 +245,23 @@ def determine_report_status(items: List[Dict[str, Any]]) -> str:
     return APPROVED
 
 
-def audit_expense(trip: Any, expense: Any) -> Dict[str, Any]:
-    flags: List[Dict[str, str]] = []
-
-    if not (trip.start_date <= expense.expense_date <= trip.end_date):
-        flags.append(
-            _flag(
-                "R-GEN-001",
-                "EXPENSE_OUT_OF_TRIP_DATE",
-                HIGH,
-                "消费日期不在出差期间内，需人工复核。",
-            )
+def audit_expense(
+    trip: Any,
+    expense: Any,
+    registry: Optional[PolicyRegistry] = None,
+) -> Dict[str, Any]:
+    selected_registry = registry or policy_registry
+    policy = selected_registry.document
+    rules = list(selected_registry.rules)
+    rule_results = [
+        _build_rule_result(
+            rule=rule,
+            policy_version=policy.policy_version,
+            result=_evaluate_rule(rule, policy, trip, expense),
         )
-
-    if expense.amount <= 0:
-        flags.append(
-            _flag(
-                "R-GEN-003",
-                "INVALID_AMOUNT",
-                HIGH,
-                "报销金额必须大于 0。",
-            )
-        )
-
-    if not _has_receipt(expense):
-        flags.append(
-            _flag(
-                "R-GEN-002",
-                "RECEIPT_MISSING",
-                HIGH,
-                "该笔费用缺少报销凭证。",
-            )
-        )
-
-    if expense.category == "住宿" and expense.amount > 800:
-        flags.append(
-            _flag(
-                "R-HOTEL-001",
-                "HOTEL_AMOUNT_EXCEED_LIMIT",
-                MEDIUM,
-                "住宿费用超过 800 元标准，需补充审批说明。",
-            )
-        )
-
-    if expense.category == "餐饮" and expense.amount > 150:
-        flags.append(
-            _flag(
-                "R-MEAL-001",
-                "MEAL_AMOUNT_EXCEED_LIMIT",
-                MEDIUM,
-                "单笔餐饮费用超过 150 元标准，需人工复核。",
-            )
-        )
-
-    if expense.category in {"交通", "市内出行"} and expense.amount > 300:
-        flags.append(
-            _flag(
-                "R-TRAFFIC-002",
-                "LOCAL_TRAFFIC_AMOUNT_HIGH",
-                MEDIUM,
-                "单笔市内出行费用超过 300 元，需人工复核。",
-            )
-        )
-
-    if expense.category == "其他":
-        flags.append(
-            _flag(
-                "R-OTHER-001",
-                "OTHER_EXPENSE_NEED_REVIEW",
-                LOW,
-                "其他费用需人工确认是否与出差相关。",
-            )
-        )
+        for rule in rules
+    ]
+    flags = _build_legacy_flags(rules, rule_results)
 
     return {
         "expense_id": expense.id,
@@ -128,14 +269,23 @@ def audit_expense(trip: Any, expense: Any) -> Dict[str, Any]:
         "amount": float(expense.amount),
         "expense_date": expense.expense_date.isoformat(),
         "merchant": expense.merchant,
-        "status": _determine_item_status(flags),
+        "status": _determine_item_status(rule_results),
         "flags": flags,
         "rule_hits": [flag["rule_id"] for flag in flags],
+        "rule_results": rule_results,
     }
 
 
-def audit_trip(trip: Any, expenses: List[Any]) -> Dict[str, Any]:
-    items = [audit_expense(trip, expense) for expense in expenses]
+def audit_trip(
+    trip: Any,
+    expenses: List[Any],
+    registry: Optional[PolicyRegistry] = None,
+) -> Dict[str, Any]:
+    selected_registry = registry or policy_registry
+    items = [
+        audit_expense(trip, expense, registry=selected_registry)
+        for expense in expenses
+    ]
 
     total_amount = sum(item["amount"] for item in items)
     approved_amount = sum(
@@ -147,7 +297,6 @@ def audit_trip(trip: Any, expenses: List[Any]) -> Dict[str, Any]:
     needs_review_amount = sum(
         item["amount"] for item in items if item["status"] == NEEDS_REVIEW
     )
-
     all_flags = [
         flag["flag"]
         for item in items
@@ -155,6 +304,8 @@ def audit_trip(trip: Any, expenses: List[Any]) -> Dict[str, Any]:
     ]
 
     return {
+        "policy_id": selected_registry.policy_id,
+        "policy_version": selected_registry.policy_version,
         "trip_id": trip.id,
         "status": determine_report_status(items),
         "total_amount": round(total_amount, 2),
@@ -166,9 +317,7 @@ def audit_trip(trip: Any, expenses: List[Any]) -> Dict[str, Any]:
             "approved_expense_count": sum(
                 1 for item in items if item["status"] == APPROVED
             ),
-            "flagged_expense_count": sum(
-                1 for item in items if item["flags"]
-            ),
+            "flagged_expense_count": sum(1 for item in items if item["flags"]),
             "flags": list(dict.fromkeys(all_flags)),
         },
         "items": items,
