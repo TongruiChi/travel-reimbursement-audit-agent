@@ -1,9 +1,11 @@
+from app.policy import policy_registry
 from app.rag import rule_rag
 
 
 def test_rule_chunks_loaded():
     rule_ids = [chunk.rule_id for chunk in rule_rag.rule_chunks]
 
+    assert rule_rag.registry is policy_registry
     assert len(rule_ids) == 10
     assert "R-GEN-001" in rule_ids
     assert "R-GEN-002" in rule_ids

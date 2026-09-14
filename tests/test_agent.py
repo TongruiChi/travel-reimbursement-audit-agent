@@ -20,6 +20,7 @@ def test_agent_runs_fixed_six_step_flow_and_saves_report(db_session, seeded_db):
     assert len(result["steps"]) == 6
     assert len(result["retrieved_rules"]) == 6
     assert len(result["audit_report"]["detail"]["items"]) == 6
+    assert result["audit_report"]["detail"]["policy_version"] == "1.0.0"
     assert step_names == [
         "LOAD_TRIP",
         "LOAD_EXPENSES",
