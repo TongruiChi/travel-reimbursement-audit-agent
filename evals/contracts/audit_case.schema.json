@@ -1,0 +1,311 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/evals/contracts/audit-case-v1.schema.json",
+  "title": "Audit Evaluation Case v1",
+  "description": "Review-first contract for one synthetic trip audit case.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "case_id",
+    "name",
+    "description",
+    "tags",
+    "policy",
+    "input",
+    "label"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "audit_case.v1"
+    },
+    "case_id": {
+      "type": "string",
+      "pattern": "^AUD-PILOT-[0-9]{3}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tags": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "policy": {
+      "$ref": "#/$defs/policyRef"
+    },
+    "input": {
+      "$ref": "#/$defs/auditInput"
+    },
+    "label": {
+      "$ref": "#/$defs/auditLabel"
+    }
+  },
+  "$defs": {
+    "policyRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy_id", "policy_version"],
+      "properties": {
+        "policy_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "trip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "employee_name",
+        "origin",
+        "destination",
+        "start_date",
+        "end_date",
+        "purpose"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "employee_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "origin": {
+          "type": "string",
+          "minLength": 1
+        },
+        "destination": {
+          "type": "string",
+          "minLength": 1
+        },
+        "start_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "end_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["receipt_type", "receipt_number", "amount"],
+      "properties": {
+        "receipt_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "receipt_number": {
+          "type": ["string", "null"]
+        },
+        "amount": {
+          "type": "number"
+        }
+      }
+    },
+    "expense": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "expense_date",
+        "category",
+        "amount",
+        "currency",
+        "merchant",
+        "description",
+        "receipt"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "expense_date": {
+          "type": "string",
+          "format": "date"
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "amount": {
+          "type": "number"
+        },
+        "currency": {
+          "type": "string",
+          "pattern": "^[A-Z]{3}$"
+        },
+        "merchant": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "city": {
+          "type": ["string", "null"]
+        },
+        "night_count": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "receipt": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/receipt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "auditInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trip", "expenses"],
+      "properties": {
+        "trip": {
+          "$ref": "#/$defs/trip"
+        },
+        "expenses": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/expense"
+          }
+        }
+      }
+    },
+    "evaluationResult": {
+      "enum": ["PASS", "VIOLATION", "INDETERMINATE", "NOT_APPLICABLE"]
+    },
+    "ruleResults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "R-GEN-001",
+        "R-GEN-002",
+        "R-GEN-003",
+        "R-TRAFFIC-001",
+        "R-TRAFFIC-002",
+        "R-HOTEL-001",
+        "R-HOTEL-002",
+        "R-MEAL-001",
+        "R-MEAL-002",
+        "R-OTHER-001"
+      ],
+      "properties": {
+        "R-GEN-001": {"$ref": "#/$defs/evaluationResult"},
+        "R-GEN-002": {"$ref": "#/$defs/evaluationResult"},
+        "R-GEN-003": {"$ref": "#/$defs/evaluationResult"},
+        "R-TRAFFIC-001": {"$ref": "#/$defs/evaluationResult"},
+        "R-TRAFFIC-002": {"$ref": "#/$defs/evaluationResult"},
+        "R-HOTEL-001": {"$ref": "#/$defs/evaluationResult"},
+        "R-HOTEL-002": {"$ref": "#/$defs/evaluationResult"},
+        "R-MEAL-001": {"$ref": "#/$defs/evaluationResult"},
+        "R-MEAL-002": {"$ref": "#/$defs/evaluationResult"},
+        "R-OTHER-001": {"$ref": "#/$defs/evaluationResult"}
+      }
+    },
+    "expectedAuditItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expense_id", "status", "flags", "rule_results"],
+      "properties": {
+        "expense_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "enum": ["APPROVED", "NEEDS_REVIEW", "REJECTED"]
+        },
+        "flags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "rule_results": {
+          "$ref": "#/$defs/ruleResults"
+        }
+      }
+    },
+    "candidateExpected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["report_status", "items"],
+      "properties": {
+        "report_status": {
+          "enum": ["APPROVED", "NEEDS_REVIEW", "REJECTED"]
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/expectedAuditItem"
+          }
+        }
+      }
+    },
+    "auditLabel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "candidate_expected",
+        "reviewer",
+        "reviewed_at",
+        "review_notes"
+      ],
+      "properties": {
+        "status": {
+          "const": "APPROVED"
+        },
+        "candidate_expected": {
+          "$ref": "#/$defs/candidateExpected"
+        },
+        "reviewer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "review_notes": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
