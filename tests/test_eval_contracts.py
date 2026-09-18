@@ -73,9 +73,29 @@ def _semantic_hash(value):
     return hashlib.sha256(payload).hexdigest()
 
 
+def _canonical_text_sha256(path: Path) -> str:
+    """Hash text with platform line endings normalized to canonical LF."""
+    data = path.read_bytes()
+    canonical = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(canonical).hexdigest()
+
+
 def _policy_rule_ids():
     policy = _load_json(POLICY_PATH)
     return {rule["rule_id"] for rule in policy["rules"]}
+
+
+def test_canonical_text_sha256_ignores_line_ending_style(tmp_path):
+    lf_path = tmp_path / "lf.jsonl"
+    crlf_path = tmp_path / "crlf.jsonl"
+    cr_path = tmp_path / "cr.jsonl"
+    lf_path.write_bytes(b'{"id":1}\n{"id":2}\n')
+    crlf_path.write_bytes(b'{"id":1}\r\n{"id":2}\r\n')
+    cr_path.write_bytes(b'{"id":1}\r{"id":2}\r')
+
+    expected = _canonical_text_sha256(lf_path)
+    assert _canonical_text_sha256(crlf_path) == expected
+    assert _canonical_text_sha256(cr_path) == expected
 
 
 def _assert_approved_label(label):
@@ -271,12 +291,12 @@ def test_pilot_v1_baseline_is_versioned_and_matches_datasets():
     assert baseline["rag_dataset"]["path"] == "evals/data/rag_pilot.jsonl"
     assert baseline["audit_dataset"]["approved_cases"] == 12
     assert baseline["rag_dataset"]["approved_queries"] == 12
-    assert baseline["audit_dataset"]["sha256"] == hashlib.sha256(
-        AUDIT_DATA_PATH.read_bytes()
-    ).hexdigest()
-    assert baseline["rag_dataset"]["sha256"] == hashlib.sha256(
-        RAG_DATA_PATH.read_bytes()
-    ).hexdigest()
+    assert baseline["audit_dataset"]["sha256"] == _canonical_text_sha256(
+        AUDIT_DATA_PATH
+    )
+    assert baseline["rag_dataset"]["sha256"] == _canonical_text_sha256(
+        RAG_DATA_PATH
+    )
     assert baseline["golden_semantic_hashes"] == {
         "audit_candidate_expected": (
             "48a1145b51e6018410db88dd6908661a17e899065872b35c274f0514a7cb3b9c"
