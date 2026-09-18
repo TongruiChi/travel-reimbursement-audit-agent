@@ -33,6 +33,8 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Output directory. Defaults to artifacts/evals/<run-id>.",
     )
+    parser.add_argument("--retriever", default="keyword-v1",
+                        choices=("keyword-v1", "bm25-v1", "embedding-v1", "hybrid-v1"))
     return parser
 
 
@@ -40,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     run_id = args.output.name if args.output is not None else make_run_id()
     output_directory = resolve_output_directory(args.output, run_id)
-    report = build_rag_report(args.queries, run_id=run_id)
+    report = build_rag_report(args.queries, run_id=run_id, retriever_id=args.retriever)
     json_path, _ = write_report_pair(
         report,
         output_directory,

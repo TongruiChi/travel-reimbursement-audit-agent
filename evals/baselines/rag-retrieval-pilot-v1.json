@@ -1,0 +1,16 @@
+{
+  "baseline_id": "rag-retrieval-pilot-v1",
+  "schema_version": "rag-comparison.v1",
+  "evaluation_scope": "pilot-v1",
+  "dataset": "evals/data/rag_pilot.jsonl",
+  "approved_queries": 12,
+  "retrievers": {
+    "keyword-v1": {"recall_at_1": 90.91, "recall_at_3": 90.91, "set_recall_at_3": 86.36, "mrr": 90.91, "negative_accuracy": 100.0},
+    "bm25-v1": {"recall_at_1": 100.0, "recall_at_3": 100.0, "set_recall_at_3": 95.45, "mrr": 100.0, "negative_accuracy": 100.0},
+    "embedding-v1": {"recall_at_1": 90.91, "recall_at_3": 90.91, "set_recall_at_3": 90.91, "mrr": 90.91, "negative_accuracy": 100.0},
+    "hybrid-v1": {"recall_at_1": 100.0, "recall_at_3": 100.0, "set_recall_at_3": 100.0, "mrr": 100.0, "negative_accuracy": 100.0}
+  },
+  "embedding_identity": {"algorithm": "sha256-token-hash", "dimension": 512, "learned_model": false, "semantic_embedding": false, "deterministic": true},
+  "comparison_summary": {"fixed_by_bm25": 1, "fixed_by_embedding": 1, "fixed_by_hybrid": 1, "completed_by_bm25": 0, "completed_by_embedding": 1, "completed_by_hybrid": 1, "regressions": 0, "still_failed": 0, "multi_rule_partial": 1, "negative_correct": 1},
+  "notes": ["Pilot baseline only; not a production benchmark.", "Latency is diagnostic development-machine measurement.", "Phase-1 labels remain pending and are excluded."]
+}

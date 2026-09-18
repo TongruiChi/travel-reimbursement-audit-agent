@@ -18,7 +18,7 @@ from app.audit_engine import audit_trip as run_audit_trip
 from app.config import settings
 from app.database import get_db, init_db
 from app.models import Expense
-from app.rag import rule_rag
+from app.rag import get_retriever, rule_rag
 from app.reporting import format_audit_report, format_audit_report_summary
 
 
@@ -297,6 +297,31 @@ def search_rules(
     return {
         "query": query,
         "count": len(results),
-        "results": results
+        "results": [
+            {
+                "score": item.score,
+                "rule": {
+                    "rule_id": item.rule_id,
+                    "title": item.section_title,
+                    "content": item.text,
+                },
+            }
+            for item in results
+        ]
     }
+
+
+@app.get("/knowledge/search")
+def search_knowledge(
+    q: str = Query(..., min_length=1),
+    top_k: int = Query(5, ge=1, le=20),
+    retriever: str = Query("keyword-v1"),
+):
+    try:
+        selected = get_retriever(retriever)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    results = selected.search(q, top_k)
+    return {"query": q, "retriever": selected.retriever_id,
+            "count": len(results), "results": [item.to_dict() for item in results]}
 

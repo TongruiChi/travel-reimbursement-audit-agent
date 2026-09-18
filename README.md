@@ -26,6 +26,7 @@ The MVP keeps compliance decisions deterministic because reimbursement checks mu
 - Mock trip, expense, and receipt data.
 - Markdown company travel policy.
 - Keyword-based RAG rule retrieval.
+- Pluggable keyword, BM25, deterministic hash-vector, and RRF hybrid retrieval.
 - Deterministic audit engine.
 - Hand-written Agent orchestration layer.
 - JSON audit report persistence in `audit_reports`.
@@ -48,6 +49,11 @@ The MVP keeps compliance decisions deterministic because reimbursement checks mu
 - Standard-library demo scripts
 
 No LLM, LangChain, vector database, OCR, or frontend is included in the current MVP.
+
+The Step 15 retrieval comparison uses the approved 12-query Pilot Golden Dataset.
+`embedding-v1` is an offline deterministic hash-vector baseline, not a learned
+semantic embedding model. See `docs/rag-retrieval-design.md` and
+`evals/baselines/rag-retrieval-pilot-v1.json`.
 
 ## 5. System Architecture
 
