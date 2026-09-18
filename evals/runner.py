@@ -11,7 +11,7 @@ from typing import Any, Callable
 
 from app.audit_engine import audit_trip
 from app.policy import policy_registry
-from app.rag import rule_rag
+from app.rag import get_retriever, rule_rag
 from evals.metrics import (
     FINAL_STATES,
     RULE_STATES,
@@ -322,6 +322,7 @@ def build_rag_report(
     dataset_path: str | Path = DEFAULT_RAG_QUERIES,
     *,
     run_id: str | None = None,
+    retriever_id: str = "keyword-v1",
 ) -> dict[str, Any]:
     path = Path(dataset_path).resolve()
     records = _load_jsonl(path)
@@ -334,13 +335,14 @@ def build_rag_report(
     query_results = []
     failures = []
 
+    retriever = get_retriever(retriever_id)
     for record in approved:
         query = record["input"]["query"]
         relevant = list(
             record["label"]["candidate_expected"]["relevant_rule_ids"]
         )
-        search_results = rule_rag.search(query, top_k=requested_ranking_depth)
-        retrieved = [item["rule"]["rule_id"] for item in search_results]
+        search_results = retriever.search(query, top_k=requested_ranking_depth)
+        retrieved = [item.rule_id for item in search_results if item.rule_id]
         relevant_sets.append(relevant)
         retrieved_rankings.append(retrieved)
 
@@ -404,7 +406,7 @@ def build_rag_report(
         scored_count=len(approved),
         skipped_count=skipped_count,
     )
-    metadata["retriever_id"] = "keyword-v1"
+    metadata["retriever_id"] = retriever_id
     metadata["positive_query_count"] = sum(bool(item) for item in relevant_sets)
     metadata["negative_query_count"] = sum(not item for item in relevant_sets)
     metadata["requested_ranking_depth"] = requested_ranking_depth
