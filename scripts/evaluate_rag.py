@@ -34,7 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output directory. Defaults to artifacts/evals/<run-id>.",
     )
     parser.add_argument("--retriever", default="keyword-v1",
-                        choices=("keyword-v1", "bm25-v1", "embedding-v1", "hybrid-v1"))
+                        choices=("keyword-v1", "bm25-v1", "embedding-v1", "hybrid-v1", "embedding-v2", "hybrid-v2"))
     return parser
 
 

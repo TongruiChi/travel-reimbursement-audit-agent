@@ -27,6 +27,7 @@ The MVP keeps compliance decisions deterministic because reimbursement checks mu
 - Markdown company travel policy.
 - Keyword-based RAG rule retrieval.
 - Pluggable keyword, BM25, deterministic hash-vector, and RRF hybrid retrieval.
+- Optional local pretrained semantic retrieval with multilingual-E5-small.
 - Deterministic audit engine.
 - Hand-written Agent orchestration layer.
 - JSON audit report persistence in `audit_reports`.
@@ -55,6 +56,12 @@ The Step 15 retrieval comparison uses the approved 12-query Pilot Golden Dataset
 semantic embedding model. See `docs/rag-retrieval-design.md` and
 `evals/baselines/rag-retrieval-pilot-v1.json`.
 
+Step 15B adds optional, local pretrained semantic retrieval with
+`intfloat/multilingual-e5-small` (`embedding-v2`) and BM25 + semantic RRF
+(`hybrid-v2`). Install `requirements-semantic.txt` to enable these retrievers.
+This is exact search over the current small policy corpus, not a production-scale
+vector database.
+
 ## 5. System Architecture
 
 ```text
@@ -75,7 +82,7 @@ Main modules:
 - `app/models.py`: SQLAlchemy ORM models.
 - `app/schemas.py`: Pydantic schemas.
 - `app/crud.py`: database operations.
-- `app/rag.py`: keyword-based Markdown rule retrieval.
+- `app/rag.py`: keyword, BM25, hash-vector, semantic, and hybrid rule retrieval.
 - `app/audit_engine.py`: deterministic compliance audit logic.
 - `app/agent.py`: Agent orchestration layer.
 - `app/reporting.py`: JSON report formatting.
@@ -285,7 +292,7 @@ Not implemented:
 
 - Real OCR invoice recognition.
 - Real LLM planner or reasoning model.
-- Embedding retrieval or vector database.
+- Production-scale vector database.
 - Enterprise authentication and authorization.
 - Multi-tenant rule management.
 - Frontend dashboard.
@@ -294,7 +301,7 @@ Not implemented:
 
 ## 16. Future Improvements
 
-- Replace keyword retrieval with embeddings and a vector database.
+- Calibrate semantic no-result behavior on a larger independent evaluation set.
 - Add an LLM planner while keeping deterministic audit checks as tools.
 - Add OCR for invoice and receipt extraction.
 - Build an admin UI for reimbursement rule configuration.

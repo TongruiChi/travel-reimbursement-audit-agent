@@ -1,0 +1,86 @@
+{
+  "baseline_schema_version": "semantic-retrieval-baseline.v1",
+  "baseline_id": "semantic-retrieval-pilot-v1",
+  "policy_id": "company-travel-reimbursement",
+  "policy_version": "1.0.0",
+  "evaluation_scope": "pilot-v1",
+  "approved_queries": 12,
+  "golden_dataset": {
+    "path": "evals/data/rag_pilot.jsonl",
+    "sha256": "87c2de3db4faac7609e0c7844a5c35cf842b655a02b07e35cc4b8a2093019818"
+  },
+  "candidate_models": [
+    {
+      "model_id": "BAAI/bge-small-zh-v1.5",
+      "revision": "7999e1d3359715c523056ef9478215996d62a620",
+      "dimension": 512,
+      "weight_size_mb": 95.8,
+      "quality_metrics": {"recall_at_1": 90.91, "recall_at_3": 100.0, "set_recall_at_3": 90.91, "mrr": 95.45, "negative_accuracy": 0.0, "zero_result_rate": 0.0},
+      "diagnostic_latency_ms": {"model_load": 4216.73, "index_build": 200.86, "cpu_p50": 28.590, "cpu_p95": 44.236}
+    },
+    {
+      "model_id": "intfloat/multilingual-e5-small",
+      "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+      "dimension": 384,
+      "weight_size_mb": 471.0,
+      "quality_metrics": {"recall_at_1": 100.0, "recall_at_3": 100.0, "set_recall_at_3": 95.45, "mrr": 100.0, "negative_accuracy": 0.0, "zero_result_rate": 0.0},
+      "diagnostic_latency_ms": {"model_load": 7185.67, "index_build": 268.69, "cpu_p50": 43.618, "cpu_p95": 63.952}
+    }
+  ],
+  "selected_model": {
+    "model_id": "intfloat/multilingual-e5-small",
+    "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+    "dimension": 384
+  },
+  "retrievers": {
+    "embedding-v2": {
+      "implementation_type": "pretrained-semantic-embedding",
+      "model_id": "intfloat/multilingual-e5-small",
+      "similarity_threshold": null,
+      "threshold_tuning_performed": false,
+      "quality_metrics": {"recall_at_1": 100.0, "recall_at_3": 100.0, "set_recall_at_3": 95.45, "mrr": 100.0, "negative_accuracy": 0.0},
+      "diagnostic_latency_ms": {"cpu_p50": 29.390, "cpu_p95": 39.623}
+    },
+    "hybrid-v2": {
+      "components": ["bm25-v1", "embedding-v2"],
+      "fusion": "reciprocal-rank-fusion",
+      "rrf_k": 60,
+      "selected_as_default": false,
+      "quality_metrics": {"recall_at_1": 100.0, "recall_at_3": 100.0, "set_recall_at_3": 95.45, "mrr": 100.0, "negative_accuracy": 0.0},
+      "diagnostic_latency_ms": {"cpu_p50": 28.869, "cpu_p95": 39.510}
+    }
+  },
+  "embedding_v1_vs_v2_delta": {
+    "quality_percentage_points": {"recall_at_1": 9.09, "recall_at_3": 9.09, "set_recall_at_3": 4.54, "mrr": 9.09, "negative_accuracy": -100.0},
+    "diagnostic_latency_ms": {"cpu_p50": 29.044, "cpu_p95": 39.250},
+    "dimension": -128,
+    "weight_size_mb": 471.0
+  },
+  "hybrid_v1_vs_v2_delta": {
+    "quality_percentage_points": {"recall_at_1": 0.0, "recall_at_3": 0.0, "set_recall_at_3": -4.55, "mrr": 0.0, "negative_accuracy": -100.0},
+    "diagnostic_latency_ms": {"cpu_p50": 27.056, "cpu_p95": 37.569},
+    "hybrid_v1_set_recall_at_3": 100.0,
+    "hybrid_v2_set_recall_at_3": 95.45,
+    "hybrid_v2_selected_as_default": false
+  },
+  "negative_behavior": {
+    "similarity_threshold": null,
+    "threshold_tuning_performed": false,
+    "embedding_v2_negative_accuracy": 0.0,
+    "hybrid_v2_negative_accuracy": 0.0,
+    "observation": "Without threshold calibration, semantic nearest-neighbor retrieval returned results for the Pilot negative query."
+  },
+  "source_runs": {
+    "candidate_models": "artifacts/evals/semantic-model-selection/step15b-final-model-selection",
+    "six_retriever_comparison": "artifacts/evals/semantic-model-selection/step15b-final-six-retriever/rag_comparison.json",
+    "six_retriever_run_id": "20260919T122233Z"
+  },
+  "source_git_commit": "1dba21c67987c40bb687a6bd79e6e8cd74ff806a",
+  "source_worktree_dirty": true,
+  "notes": [
+    "Approved 12-query Pilot only; not production accuracy.",
+    "No threshold, model, instruction, revision, or RRF tuning was performed after observing results.",
+    "Latency is development-machine CPU diagnostic data, not a production benchmark.",
+    "hybrid-v2 does not replace hybrid-v1 as the default strong baseline."
+  ]
+}
