@@ -20,3 +20,13 @@ The sealed comparison scope is the 12-query `rag_pilot.jsonl` Pilot Golden Datas
 not a learned semantic embedding model. The versioned quality summary is
 `evals/baselines/rag-retrieval-pilot-v1.json`; latency in generated comparisons is
 diagnostic development-machine data, not a production benchmark.
+
+## Semantic Retrieval v2
+
+`embedding-v2` is fixed to `intfloat/multilingual-e5-small`, using `query: ` and
+`passage: ` prefixes, L2-normalized vectors, and exact normalized-dot-product
+search over the same 10 policy-rule corpus. `hybrid-v2` combines BM25 with this
+semantic retriever using the unchanged RRF k=60. Model dependencies are optional
+through `requirements-semantic.txt`; legacy retrieval remains available without
+Torch or model downloads. At this corpus scale, an exact in-memory matrix is more
+appropriate than a vector database.

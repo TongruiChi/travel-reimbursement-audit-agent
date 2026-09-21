@@ -19,6 +19,7 @@ from app.config import settings
 from app.database import get_db, init_db
 from app.models import Expense
 from app.rag import get_retriever, rule_rag
+from app.semantic import SemanticRetrieverUnavailableError
 from app.reporting import format_audit_report, format_audit_report_summary
 
 
@@ -319,9 +320,11 @@ def search_knowledge(
 ):
     try:
         selected = get_retriever(retriever)
+        results = selected.search(q, top_k)
+    except SemanticRetrieverUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    results = selected.search(q, top_k)
     return {"query": q, "retriever": selected.retriever_id,
             "count": len(results), "results": [item.to_dict() for item in results]}
 

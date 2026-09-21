@@ -1,4 +1,5 @@
 .venv/
+.venv-semantic/
 __pycache__/
 *.pyc
 *.pyo
@@ -14,3 +15,9 @@ __pycache__/
 
 # Generated evaluation run reports
 artifacts/evals/
+artifacts/indexes/
+*.safetensors
+pytorch_model.bin
+*.onnx
+/.cache/huggingface/
+/.cache/torch/

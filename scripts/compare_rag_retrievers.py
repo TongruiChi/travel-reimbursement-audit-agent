@@ -10,21 +10,22 @@ sys.path.insert(0, str(ROOT))
 from app.rag import get_retriever
 from evals.runner import DEFAULT_RAG_QUERIES, _approved_records, _file_sha256, _load_jsonl, build_rag_report, utc_timestamp
 
-RETRIEVERS = ("keyword-v1", "bm25-v1", "embedding-v1", "hybrid-v1")
+RETRIEVERS = ("keyword-v1", "bm25-v1", "embedding-v1", "hybrid-v1", "embedding-v2", "hybrid-v2")
 
 def classify_query(row):
     """Derive comparison tags from query-level results, never from query IDs."""
     positive = bool(row["relevant_rule_ids"])
-    results = {rid: row[rid] for rid in RETRIEVERS}
+    active = tuple(rid for rid in RETRIEVERS if rid in row)
+    results = {rid: row[rid] for rid in active}
     tags = []
     if not positive:
         if all(r.get("negative_success") for r in results.values()): tags.append("negative_correct")
-        for rid in RETRIEVERS[1:]:
+        for rid in active[1:]:
             if not results[rid].get("negative_success"): tags.append(f"{rid.replace('-v1','')}_negative_regression")
         return tags
-    hit = {rid: bool(results[rid].get("hit_at_3")) for rid in RETRIEVERS}
-    complete = {rid: results[rid].get("set_recall_at_3") == 1 for rid in RETRIEVERS}
-    for rid in RETRIEVERS[1:]:
+    hit = {rid: bool(results[rid].get("hit_at_3")) for rid in active}
+    complete = {rid: results[rid].get("set_recall_at_3") == 1 for rid in active}
+    for rid in active[1:]:
         if not hit["keyword-v1"] and hit[rid]: tags.append(f"fixed_by_{rid.replace('-v1','')}")
         if hit["keyword-v1"] and not hit[rid]: tags.append(f"{rid.replace('-v1','')}_regression")
         if hit["keyword-v1"] and results["keyword-v1"].get("set_recall_at_3", 0) < 1 and complete[rid]: tags.append(f"completed_by_{rid.replace('-v1','')}")
@@ -32,7 +33,7 @@ def classify_query(row):
     if not any(hit.values()): tags.append("still_failed")
     if all(hit.values()): tags.append("all_pass")
     if len(row["relevant_rule_ids"]) > 1:
-        partial = [rid for rid in RETRIEVERS if 0 < (results[rid].get("set_recall_at_3") or 0) < 1]
+        partial = [rid for rid in active if 0 < (results[rid].get("set_recall_at_3") or 0) < 1]
         row["partial_retrievers"] = partial
         if partial: tags.append("multi_rule_partial")
         if all(complete.values()): tags.append("all_complete")
@@ -66,6 +67,37 @@ def _tags(details, all_details, relevant):
     if positive and hit and details["set_recall_at_3"] == 1: tags.append("all_pass")
     return tags
 
+def _v2_analysis(row):
+    """Compare each v2 path directly with its v1 predecessor."""
+    tags = []
+    positive = bool(row["relevant_rule_ids"])
+    for label, old_id, new_id in (
+        ("semantic", "embedding-v1", "embedding-v2"),
+        ("hybrid", "hybrid-v1", "hybrid-v2"),
+    ):
+        old, new = row[old_id], row[new_id]
+        if not positive:
+            if old["negative_success"] and not new["negative_success"]:
+                tags.append(f"{label}_regression")
+            elif old["negative_success"] == new["negative_success"]:
+                tags.append(f"{label}_quality_tie")
+            continue
+        if not old["hit_at_3"] and new["hit_at_3"]:
+            tags.append(f"{label}_fix")
+        elif old["hit_at_3"] and not new["hit_at_3"]:
+            tags.append(f"{label}_regression")
+        if new["set_recall_at_3"] < old["set_recall_at_3"]:
+            tags.append(f"{label}_regression")
+        elif new["reciprocal_rank"] > old["reciprocal_rank"]:
+            tags.append(f"{label}_ranking_improved")
+        elif new["reciprocal_rank"] < old["reciprocal_rank"]:
+            tags.append(f"{label}_ranking_degraded")
+        elif (new["hit_at_3"], new["set_recall_at_3"]) == (
+            old["hit_at_3"], old["set_recall_at_3"]
+        ):
+            tags.append(f"{label}_quality_tie")
+    return sorted(set(tags))
+
 def build_comparison(dataset=DEFAULT_RAG_QUERIES, repeat=5, run_id=None):
     records = _load_jsonl(Path(dataset).resolve()); approved, skipped = _approved_records(records)
     query_texts = [r["input"]["query"] for r in approved]
@@ -80,7 +112,9 @@ def build_comparison(dataset=DEFAULT_RAG_QUERIES, repeat=5, run_id=None):
                 "metrics": {"recall_at_1": _percent(rate("recall_at_1")), "recall_at_3": _percent(rate("recall_at_3")), "set_recall_at_3": _percent(rate("set_recall_at_3", "mean")), "mrr": _percent(rate("mrr", "mean")), "negative_no_result_accuracy": _percent(rate("negative_no_result_accuracy", "accuracy"))},
                 "zero_result_rate": sum(not q["retrieved_rule_ids"] for q in report["queries"]) / len(report["queries"]), "latency": latency[rid], "query_details": report["queries"]}
         item["identity"] = {"algorithm":"sha256-token-hash","dimension":512,"learned_model":False,"semantic_embedding":False,"external_api":False,"deterministic":True} if rid == "embedding-v1" else None
+        if rid == "embedding-v2": item["identity"] = {"implementation_type":"pretrained-semantic-embedding","model_id":"intfloat/multilingual-e5-small","dimension":384,"learned_model":True,"semantic_embedding":True,"external_api":False,"normalize_embeddings":True,"similarity_threshold":None}
         if rid == "hybrid-v1": item["fusion"] = {"method":"reciprocal_rank_fusion","rrf_k":60,"components":["bm25-v1","embedding-v1"]}
+        if rid == "hybrid-v2": item["fusion"] = {"method":"reciprocal_rank_fusion","rrf_k":60,"components":["bm25-v1","embedding-v2"]}
         baseline_values = {"recall_at_1": baseline["recall_at_1"]["rate"], "recall_at_3": baseline["recall_at_3"]["rate"], "set_recall_at_3": baseline["set_recall_at_3"]["mean"], "mrr": baseline["mrr"]["mean"], "negative_no_result_accuracy": baseline["negative_no_result_accuracy"]["accuracy"]}
         item["deltas_vs_keyword_v1"] = {k: item["metrics"][k] - baseline_values[k] * 100 for k in baseline_values} if rid != "keyword-v1" else None
         retriever_reports[rid] = item
@@ -90,6 +124,7 @@ def build_comparison(dataset=DEFAULT_RAG_QUERIES, repeat=5, run_id=None):
         for rid in RETRIEVERS:
             detail=reports[rid]["queries"][index]; row[rid]={k:detail[k] for k in ("retrieved_rule_ids","hit_at_1","hit_at_3","set_recall_at_3","reciprocal_rank","negative_success")}
         row["comparison_tags"] = classify_query(row)
+        row["v2_analysis"] = _v2_analysis(row)
         row["retrievers"] = {rid: row[rid] for rid in RETRIEVERS}
         matrix.append(row)
     return {"schema_version":"rag-comparison.v1","run_id":run_id,"timestamp_utc":utc_timestamp(),"policy_id":"company-travel-reimbursement","policy_version":"1.0.0","evaluation_scope":"pilot-v1","dataset_path":str(Path(dataset).resolve()),"dataset_sha256":_file_sha256(Path(dataset).resolve()),"approved_queries":len(approved),"skipped_queries":skipped,"python_version":sys.version,"platform":platform.platform(),"repeat_count":repeat,"retrievers":retriever_reports,"query_matrix":matrix}
@@ -102,11 +137,11 @@ def markdown(report):
     all_tags = [tag for row in report["query_matrix"] for tag in row["comparison_tags"]]
     for tag in ("fixed_by_bm25","fixed_by_embedding","fixed_by_hybrid","completed_by_bm25","completed_by_embedding","completed_by_hybrid","still_failed","multi_rule_partial","negative_correct"):
         lines.append(f"- {tag}: {all_tags.count(tag)}")
-    lines += ["", "## Query-level Comparison", "", "| Query | Keyword | BM25 | Embedding | Hybrid | Tags |", "|---|---|---|---|---|---|"]
+    lines += ["", "## Query-level Comparison", "", "| Query | Keyword | BM25 | Hash | Hybrid v1 | Semantic | Hybrid v2 | Tags |", "|---|---|---|---|---|---|---|---|"]
     for row in report["query_matrix"]:
         def summary(rid):
             d=row[rid]; return f"hit={d['hit_at_3']}, set={d['set_recall_at_3']}"
-        lines.append(f"| {row['query_id']} | {summary('keyword-v1')} | {summary('bm25-v1')} | {summary('embedding-v1')} | {summary('hybrid-v1')} | {', '.join(row['comparison_tags'])} |")
+        lines.append(f"| {row['query_id']} | {summary('keyword-v1')} | {summary('bm25-v1')} | {summary('embedding-v1')} | {summary('hybrid-v1')} | {summary('embedding-v2')} | {summary('hybrid-v2')} | {', '.join(row['comparison_tags'] + row['v2_analysis'])} |")
     return "\n".join(lines)+"\n"
 
 def main():

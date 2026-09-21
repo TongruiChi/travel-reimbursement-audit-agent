@@ -7,6 +7,10 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from app.policy import PolicyRegistry, PolicyRule, policy_registry
+from app.semantic import (E5_CONFIG, SemanticEmbedder,
+                          SemanticRetrieverUnavailableError,
+                          SentenceTransformerEmbedder, build_semantic_index,
+                          normalized_dot)
 
 
 class Tokenizer(Protocol):
@@ -153,9 +157,86 @@ class HybridRetrieverV1:
             {**by_id[i].metadata, "component_ranks": {"bm25_rank": next((x.rank for x in rankings[0] if x.chunk_id == i), None), "embedding_rank": next((x.rank for x in rankings[1] if x.chunk_id == i), None)}}, by_id[i].rule_id) for rank, i in enumerate(ordered[:top_k], 1)]
 
 
+class SemanticPolicyRetriever:
+    def __init__(self, embedder: SemanticEmbedder, retriever_id: str, chunks=None,
+                 similarity_threshold: float | None = None):
+        self.retriever_id = retriever_id
+        self.embedder = embedder
+        self.chunks = chunks or _chunks(policy_registry)
+        self.similarity_threshold = similarity_threshold
+        self.index = build_semantic_index(embedder, self.chunks)
+
+    def search(self, query: str, top_k: int = 5):
+        query_vector = self.embedder.embed_query(query)
+        if hasattr(self.index.vectors, "shape"):
+            # Real semantic adapters retain the NumPy matrix produced by
+            # SentenceTransformer, while fake/offline adapters may use lists.
+            scores = self.index.vectors @ query_vector
+            scored = [(float(score), index) for index, score in enumerate(scores)]
+        else:
+            scored = [(normalized_dot(query_vector, vector), index)
+                      for index, vector in enumerate(self.index.vectors)]
+        if self.similarity_threshold is not None:
+            scored = [(score, index) for score, index in scored
+                      if score >= self.similarity_threshold]
+        scored.sort(key=lambda item: (-item[0], self.chunks[item[1]].chunk_id))
+        results = []
+        for rank, (score, index) in enumerate(scored[:top_k], 1):
+            result = BM25RetrieverV1._copy(self.chunks[index], score, rank)
+            result.metadata.update({
+                "implementation_type": "pretrained-semantic-embedding",
+                "model_id": self.embedder.model_id,
+                "model_revision": self.embedder.model_revision,
+                "dimension": self.embedder.dimension,
+                "query_format": self.embedder.config.query_prefix
+                    if hasattr(self.embedder, "config") else None,
+                "document_format": self.embedder.config.document_prefix
+                    if hasattr(self.embedder, "config") else None,
+                "normalize_embeddings": self.embedder.config.normalize_embeddings
+                    if hasattr(self.embedder, "config") else True,
+                "similarity_threshold": self.similarity_threshold,
+                "semantic_embedding": True,
+            })
+            results.append(result)
+        return results
+
+
+class HybridRetrieverV2(HybridRetrieverV1):
+    retriever_id = "hybrid-v2"
+
+
+def register_semantic_retrievers(embedding):
+    embedding.retriever_id = "embedding-v2"
+    RETRIEVERS["embedding-v2"] = embedding
+    RETRIEVERS["hybrid-v2"] = HybridRetrieverV2(BM25RetrieverV1(embedding.chunks), embedding, 60)
+
+
+def load_selected_semantic_retrievers():
+    current = RETRIEVERS.get("embedding-v2")
+    if not isinstance(current, UnavailableSemanticRetriever):
+        return
+    embedder = SentenceTransformerEmbedder(E5_CONFIG, device="cpu")
+    register_semantic_retrievers(
+        SemanticPolicyRetriever(embedder, "embedding-v2",
+                                similarity_threshold=E5_CONFIG.similarity_threshold)
+    )
+
+
 rule_rag = KeywordRetrieverV1()
-RETRIEVERS = {"keyword-v1": rule_rag, "bm25-v1": BM25RetrieverV1(), "embedding-v1": EmbeddingRetrieverV1(), "hybrid-v1": HybridRetrieverV1()}
+
+class UnavailableSemanticRetriever:
+    def __init__(self, retriever_id): self.retriever_id = retriever_id
+    def search(self, query, top_k=5):
+        raise SemanticRetrieverUnavailableError(
+            "semantic retrieval dependencies or model index are not loaded"
+        )
+
+
+RETRIEVERS = {"keyword-v1": rule_rag, "bm25-v1": BM25RetrieverV1(), "embedding-v1": EmbeddingRetrieverV1(), "hybrid-v1": HybridRetrieverV1(),
+              "embedding-v2": UnavailableSemanticRetriever("embedding-v2"), "hybrid-v2": UnavailableSemanticRetriever("hybrid-v2")}
 
 def get_retriever(retriever_id="keyword-v1"):
+    if retriever_id in {"embedding-v2", "hybrid-v2"}:
+        load_selected_semantic_retrievers()
     if retriever_id not in RETRIEVERS: raise ValueError(f"Unknown retriever: {retriever_id}")
     return RETRIEVERS[retriever_id]
